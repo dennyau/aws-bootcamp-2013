@@ -1,0 +1,6 @@
+Keywords to check out:
+
+- Puppet, Chef, Capistrano, Cloud-init
+
+- read more about VPC (Amazon Virtual Private Cloud)
+  and Security Groups

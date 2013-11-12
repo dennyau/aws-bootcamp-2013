@@ -1,0 +1,390 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  
+"Description" : "Lab 2: WordPress Two-Tier Website with RDS backend." ,
+
+"Parameters": {
+        "InstanceTag": {
+            "Description": "Enter a name tag to help identify your WordPress EC2 instance later",
+            "Type": "String",
+            "Default": "WPplusRDS"
+        },
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to EC2 instance",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern": "[-_ a-zA-Z0-9]*",
+	    "Default" : "mykeypair",
+            "ConstraintDescription": "Can contain only alphanumeric characters, spaces, dashes and underscores."
+        }
+},
+"Mappings" : {
+        "AMZNAMI": {
+            "us-east-1": {
+                "AMI": "ami-05355a6c"
+            },
+            "us-west-2": {
+                "AMI": "ami-ecbe2adc"
+            },
+            "us-west-1": {
+                "AMI": "ami-66d1fc23"
+            },
+            "eu-west-1": {
+                "AMI": "ami-44939930"
+            },
+            "ap-southeast-1": {
+                "AMI": "ami-aa9ed2f8"
+            },
+            "ap-southeast-2": {
+                "AMI": "ami-363eaf0c"
+            },
+            "ap-northeast-1": {
+                "AMI": "ami-173fbf16"
+            },
+            "sa-east-1": {
+                "AMI": "ami-dd6bb0c0"
+            }
+        },
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.0.0.0/16"
+            },
+            "PublicSubnet1": {
+                "CIDR": "10.0.0.0/24"
+            },
+            "PrivateSubnet1": {
+                "CIDR": "10.0.1.0/24"
+            },
+            "PrivateSubnet2": {
+                "CIDR": "10.0.3.0/24"
+            }
+        }
+},
+    
+  "Resources" : {  
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "InstanceTag"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "InstanceTag"
+                        }
+                    }
+                ]
+            }
+        },
+        "GatewayToInternet": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet1",
+                        "CIDR"
+                    ]
+                },
+            "AvailabilityZone" : { "Fn::Select" : [    "0", { "Fn::GetAZs" : ""} ] },
+                "Tags": [ { "Key": "Application", "Value": { "Ref": "InstanceTag" } } ]
+            }
+        },
+
+
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [ { "Key": "Application", "Value": { "Ref": "InstanceTag" } } ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "GatewayToInternet",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+
+
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet1",
+                        "CIDR"
+                    ]
+                },
+		"AvailabilityZone" : { "Fn::Select" : [ "0" , { "Fn::GetAZs" : ""} ]},
+                "Tags": [ { "Key": "Application", "Value": { "Ref": "InstanceTag" } } ]
+            }
+        },
+
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet2",
+                        "CIDR"
+                    ]
+                },
+		"AvailabilityZone" : { "Fn::Select" : [ "1" , { "Fn::GetAZs" : ""} ]},
+                "Tags": [ { "Key": "Application", "Value": { "Ref": "InstanceTag" } } ]
+            }
+        },
+
+
+    "CfnUser" : {
+      "Type" : "AWS::IAM::User",
+      "Properties" : {
+        "Path": "/",
+        "Policies": [{
+          "PolicyName": "root",
+          "PolicyDocument": { "Statement":[{
+            "Effect":"Allow",
+            "Action":"cloudformation:DescribeStackResource",
+            "Resource":"*"
+          }]}
+        }]
+      }
+    },
+
+    "HostKeys" : {
+      "Type" : "AWS::IAM::AccessKey",
+      "Properties" : {
+        "UserName" : {"Ref": "CfnUser"}
+      }
+    },
+
+    "WebServerIPAddress": {
+        "Type": "AWS::EC2::EIP",
+        "DependsOn": "GatewayToInternet",
+        "Properties": {
+            "Domain": "vpc",
+            "InstanceId": { "Ref": "WebServer" }
+        }
+    },
+
+    "WebServerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+	"VpcId" : { "Ref" : "VPC" },
+        "GroupDescription" : "Enable HTTP access via port 80 and SSH access",
+        "SecurityGroupIngress" : [
+          {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"},
+          {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : "72.21.196.0/24"}
+        ]
+      }      
+    },         
+
+    "WebServer": {  
+      "Type": "AWS::EC2::Instance",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "packages" : {
+              "yum" : {
+                "httpd"     : [],
+                "php"       : [],
+                "php-ldap"  : [],
+                "php-mysql" : []
+              }
+            },
+            "sources" : {
+		"/var/www/html/" : "https://s3.amazonaws.com/bootcamp03/public/wordpress-3.6.1.zip",
+		"/var/www/html/wordpress/wp-content/plugins/" : "https://s3.amazonaws.com/bootcamp03/public/simple-ldap-login.1.5.4.zip",
+		"/var/www/html/wordpress/wp-content/plugins//" : "https://s3.amazonaws.com/bootcamp03/public/wordpress-importer.0.6.1.zip"		
+            },
+			
+            "files" : {
+              "/var/www/html/wordpress/wp-config.php" : {
+                "content" : { "Fn::Join" : ["", [
+                  "<?php\n",
+                  "define('DB_NAME',          'wordpress');\n",
+                  "define('DB_USER',          'reInvent');\n",
+                  "define('DB_PASSWORD',      'reInvent');\n",
+                  "define('DB_HOST',          '", {"Fn::GetAtt" : ["DBInstance", "Endpoint.Address"]},"');\n",
+                  "define('DB_CHARSET',       'utf8');\n",
+                  "define('DB_COLLATE',       '');\n",
+                  "define('AUTH_KEY',         'f@A17vs{ mO0}:&I,6SB.QzV`E?!`/tN5:~GZX%=@ZA%!_T0-]9>g]4ll6~,6G|R');\n",
+                  "define('SECURE_AUTH_KEY',  'gTFTI|~rYHY)|mlu:Cv7RN]GQ^3ngyUbw;L0o!12]0c-ispR<-yt3qj]xjquz^&9');\n",
+                  "define('LOGGED_IN_KEY',    'Jd:HG9M)1p5t2<v~+R-vd{p-Q*|*RB^&PUI{vIrydAEEiV!{HS{jN:nErCmLv`p}');\n",
+                  "define('NONCE_KEY',        '4aMj4KZV;,Gu7(B|qOCve[c5?*J5x1+x93i:Ey6hh/6jXh+V_{V4+hw!qE^d*U,-');\n",
+                  "define('AUTH_SALT',        '_Y_&8m)FH)Cns)8}Yb8b88KDSn:p1#p(qBa<~VW&Y1v}P.*9/8S8@P`{mkNxV lC');\n",
+                  "define('SECURE_AUTH_SALT', '%nG3Ag41^Lew5c86,#zbN:yPFs.GA5a)z5*:Oce1>v6uF~D`,.o1pzS)F8[bM9i[');\n",
+                  "define('LOGGED_IN_SALT',   '~K<y+Ly+_Ww1~dtq>;rSQ^+{P5/k|=!]k%RXAF-Y@XMY6GSp+wJ5{(|rCzaWjZ%/');\n",
+                  "define('NONCE_SALT',       ',Bs_*Y9:b/1Z:apVLHtz35uim|okkA,b|Jt[-&Nla=T{<l_#D?~6Tj-.2.]FonI~');\n",
+                  "define('WPLANG'            , '');\n",
+                  "define('WP_DEBUG'          , false);\n",
+                  "$table_prefix  = 'wp_';\n",
+                  "if ( !defined('ABSPATH') )\n",
+                  "    define('ABSPATH', dirname(__FILE__) . '/');\n",
+                  "require_once(ABSPATH . 'wp-settings.php');\n"
+                ]] },
+                "mode" : "000644",
+                "owner" : "root",
+                "group" : "root"
+              }
+            },
+            "services" : {
+              "sysvinit" : {
+                "httpd"    : { "enabled" : "true", "ensureRunning" : "true" },
+                "sendmail" : { "enabled" : "false", "ensureRunning" : "false" }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId" : { "Fn::FindInMap" : [ "AMZNAMI", { "Ref": "AWS::Region" }, "AMI"] },
+        "InstanceType"   : "m1.medium",
+        "SecurityGroupIds" : [{ "Ref" : "WebServerSecurityGroup" }],
+	"SubnetId"       : { "Ref" : "PublicSubnet1" },
+        "KeyName"        :  { "Ref" : "KeyName" },
+        "Tags" : [ { "Key" : "Name", "Value" : { "Ref" : "InstanceTag" } } ],
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash\n",
+          "yum update -y aws-cfn-bootstrap\n",
+
+          "/opt/aws/bin/cfn-init -s ", { "Ref" : "AWS::StackName" }, " -r WebServer ",
+          "         --access-key ", { "Ref" : "HostKeys" },
+          "         --secret-key ", {"Fn::GetAtt": ["HostKeys", "SecretAccessKey"]},
+          "         --region ", { "Ref" : "AWS::Region" }, "\n",
+
+          "/opt/aws/bin/cfn-signal -e $? '", { "Ref" : "WaitHandle" }, "'\n",
+
+          "# Setup correct file ownership\n",
+          "chown -R apache:apache /var/www/html/wordpress\n"
+
+        ]]}}        
+      }
+    },
+
+    "WaitHandle" : {
+      "Type" : "AWS::CloudFormation::WaitConditionHandle"
+    },
+
+    "WaitCondition" : {
+      "Type" : "AWS::CloudFormation::WaitCondition",
+      "DependsOn" : "WebServer",
+      "Properties" : {
+        "Handle" : {"Ref" : "WaitHandle"},
+        "Timeout" : "600"
+      }
+    },
+	
+
+    "DBInstance" : {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBName"            : "wordpress",
+        "Engine"            : "MySQL",
+        "MasterUsername"    : "reInvent",
+        "MasterUserPassword": "reInvent",
+        "DBInstanceClass"   : "db.m1.medium",
+        "VPCSecurityGroups": [ { "Ref": "DBSecurityGroup" } ],
+   	"DBSubnetGroupName" : { "Ref" : "DBSubnetGroup" },
+        "AllocatedStorage"  : "5"
+      }
+    },
+
+    "DBSubnetGroup" : {
+        "Type" : "AWS::RDS::DBSubnetGroup",
+        "Properties" : {
+            "DBSubnetGroupDescription" : "Subnets for the DB",
+	    "SubnetIds" : [ { "Ref" : "PrivateSubnet1" }, { "Ref" : "PrivateSubnet2" } ]
+        }
+    },
+
+    "DBSecurityGroup" : {
+	    "Type" : "AWS::EC2::SecurityGroup",
+	    "Properties": {
+                "SecurityGroupIngress": [
+                    {
+                        "FromPort": "3306",
+                        "CidrIp": "0.0.0.0/0",
+                        "ToPort": "3306",
+                        "IpProtocol": "tcp"
+                    }
+                ],
+	        "VpcId" : { "Ref" : "VPC" },
+                "GroupDescription": "MySQL access"
+            }
+    }
+
+},	
+
+    
+  "Outputs" : {
+    "WebsiteURL" : {
+      "Value" : { "Fn::Join" : ["", ["http://", { "Fn::GetAtt" : [ "WebServer", "PublicIp" ]}, "/wordpress"]] },
+      "Description" : "Lab 2: WordPress Website with RDS"
+    }
+  }
+}

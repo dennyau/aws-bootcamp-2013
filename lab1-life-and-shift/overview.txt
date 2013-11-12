@@ -1,0 +1,7 @@
+We created an m1.large from the linux OS AMI and will populate it at launch by curling to a bash script then piping it into sh.
+
+EC2 instances are attached EBS (Elastic Block Storage) ... basically AWS disk drives
+
+We associate the security group to the EC2 instance so it knows what's allowed to reach it.
+
+Ah-ha, the tutorial delibrately makes us misconfigure the key-pair so now we tag the instance so that we know which keypair is allowed to SSH into it.
